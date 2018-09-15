@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <category label="30000">
+        <setting label="30001" type="bool" id="pvrclients" default="true"/>
+        <setting label="30002" type="number" id="pvrport" default="34890"/>
+        <setting label="30003" type="lsep" />
+        <setting label="30004" type="number" id="rpcport" default="8080"/>
+        <setting label="30005" type="text" id="username" default="kodi"/>
+        <setting label="30006" type="text" id="password" enable="!eq(-1,)" option="hidden" default=""/>
+        <setting label="30007" type="lsep" />
+        <setting label="30008" type="text" id="client1_name" default="" />
+        <setting label="30009" type="ipaddress" id="client1_ip" default=""/>
+        <setting label="30010" type="text" id="client2_name" default=""/>
+        <setting label="30011" type="ipaddress" id="client2_ip" default=""/>
+        <setting label="30012" type="text" id="client3_name" default=""/>
+        <setting label="30013" type="ipaddress" id="client3_ip" default=""/>
+        <setting label="30014" type="text" id="client4_name" default=""/>
+        <setting label="30015" type="ipaddress" id="client4_ip" default=""/>
+    </category>
+</settings>

@@ -1,0 +1,106 @@
+# XBMC Media Center language file
+# Addon Name: Now Playing
+# Addon id: script.nowplaying
+# Addon version: x
+# Addon Provider: Paulemann
+msgid ""
+msgstr ""
+"Project-Id-Version: XBMC-Addons\n"
+"Report-Msgid-Bugs-To: alanwww1@xbmc.org\n"
+"POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: de\n"
+"Plural-Forms: nplurals=2; plural=(n != 1)\n"
+
+msgctxt "#30000"
+msgid "General"
+msgstr "Allgemein"
+
+msgctxt "#30001"
+msgid "Identify kodi clients via PVR port"
+msgstr "Kodi-Clients über PVR-Port identifizieren"
+
+msgctxt "#30002"
+msgid "PVR port (see config of PVR backend)"
+msgstr "PVR-Port (siehe Konf. PVR Backend)"
+
+msgctxt "#30003"
+msgid "RPC Settings"
+msgstr "RPC-Einstellungen"
+
+msgctxt "#30004"
+msgid "RPC Port"
+msgstr "RPC-Port"
+
+msgctxt "#30005"
+msgid "User name"
+msgstr "Benutzername"
+
+msgctxt "#30006"
+msgid "Password"
+msgstr "Passwort"
+
+msgctxt "#30007"
+msgid "Kodi clients"
+msgstr "Kodi-Clients"
+
+msgctxt "#30008"
+msgid "Client#1 name"
+msgstr "Client#1 Name"
+
+msgctxt "#30009"
+msgid "Client#1 IP address"
+msgstr "Client#1 IP-Adresse"
+
+msgctxt "#30010"
+msgid "Client#2 name"
+msgstr "Client#2 Name"
+
+msgctxt "#30011"
+msgid "Client#2 IP address"
+msgstr "Client#2 IP-Adresse"
+
+msgctxt "#30012"
+msgid "Client#3 name"
+msgstr "Client#3 Name"
+
+msgctxt "#30013"
+msgid "Client#3 IP address"
+msgstr "Client#3 IP-Adresse"
+
+msgctxt "#30014"
+msgid "Client#4 name"
+msgstr "Client#4 Name"
+
+msgctxt "#30015"
+msgid "Client#4 IP address"
+msgstr "Client#4 IP-Adresse"
+
+msgctxt "#30050"
+msgid "Select kodi client to stop playback"
+msgstr "Zum Anhalten der Wiedergabe, einen Kodi-Client auswählen"
+
+msgctxt "#30051"
+msgid "OK"
+msgstr "OK"
+
+msgctxt "#30052"
+msgid "Cancel"
+msgstr "Abbruch"
+
+msgctxt "#30053"
+msgid "No playback currently"
+msgstr "Zurzeit findet keine Wiedergabe statt"
+
+msgctxt "#30054"
+msgid "TV Recording"
+msgstr "TV-Aufnahme"
+
+msgctxt "#30055"
+msgid "The current playback was intentionally stopped."
+msgstr "Die aktuelle Wiedergabe wurde absichtlich beendet."
