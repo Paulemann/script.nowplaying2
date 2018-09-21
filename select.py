@@ -163,12 +163,11 @@ def json_request(method, host, params=None, port=8080, username=None, password=N
 def find_hosts(port=34890):
 
     hosts = []
-    clients = set()
 
     if __setting__('pvrclients').lower() == 'true':
         my_env = os.environ.copy()
         my_env['LC_ALL'] = 'en_EN'
-        netstat = subprocess.check_output(['netstat', '-t', '-n'], universal_newlines=True, env=my_env)
+        netstat = subprocess.check_output(['netstat', '-tn'], universal_newlines=True, env=my_env)
 
         for line in netstat.split('\n')[2:]:
             items = line.split()
@@ -178,34 +177,25 @@ def find_hosts(port=34890):
             local_addr, local_port = items[3].rsplit(':', 1)
             remote_addr, remote_port = items[4].rsplit(':', 1)
 
-            #if local_addr[0] == '[' and local_addr[-1] == ']':
-            #    local_addr = local_addr[1:-1]
-
-            #if remote_addr[0] == '[' and remote_addr[-1] == ']':
-            #    remote_addr = remote_addr[1:-1]
-
-            local_addr  = local_addr.strip('[]')
-            remote_addr = remote_addr.strip('[]')
+            if local_addr:
+                local_addr  = local_addr.strip('[]')
+            if remote_addr:
+                remote_addr = remote_addr.strip('[]')
             local_port  = int(local_port)
 
-            if local_port == port:
-                clients.add(remote_addr)
-
-        for client in clients:
-            host = {'ip': client, 'name': None}
-
-            try:
-                host['name'] = socket.gethostbyaddr(client)[0].split('.')[0]
-
-            except:
-                host['name'] = client
-
-            hosts.append(host)
+            if remote_addr and local_port == port:
+                host = {'ip': remote_addr}
+                try:
+                    host['name'] = socket.gethostbyaddr(remote_addr)[0].split('.')[0]
+                except:
+                    host['name'] = remote_addr
+                hosts.append(host)
     else:
-         hosts = [{'ip': __setting__('client1_ip'), 'name': __setting__('client1_name')}, {'ip': __setting__('client2_ip'), 'name': __setting__('client2_name')}, {'ip': __setting__('client3_ip'), 'name': __setting__('client3_name')}, {'ip': __setting__('client4_ip'), 'name': __setting__('client4_name')}]
-         for host in hosts:
-             if not host['ip']:
-                 hosts.remove(host)
+        for i in range(4):
+            host = {'ip': __setting__('client{:d}_ip'.format(i + 1))}
+            if host['ip']:
+                host['name'] = __setting__('client{:d}_name'.format(i + 1))
+                hosts.append(host)
 
     return hosts
 
