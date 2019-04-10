@@ -15,8 +15,10 @@ import codecs
 #import pyxbmct
 import pyxbmct.addonwindow as pyxbmct
 
-from datetime import datetime
+from datetime import datetime, tzinfo, timedelta
+from dateutil import tz
 import _strptime
+
 from contextlib import closing
 
 
@@ -200,10 +202,68 @@ def find_hosts(port=34890):
     return hosts
 
 
+def utc_to_local(t_str, t_fmt):
+    tz_utc = tz.tzutc()
+    tz_local = tz.tzlocal()
+
+    try:
+        t = datetime.strptime(t_str, t_fmt)
+    except TypeError:
+        t = datetime(*(time.strptime(t_str, t_fmt)[0:6]))
+
+    t = t.replace(tzinfo=tz_utc)
+    t = t.astimezone(tz_local)
+
+    return t.strftime(t_fmt)
+
+
+def get_channel(pvrhost, channelid):
+    channel = ''
+
+    try:
+        pvrdetails = json_request('PVR.GetChannelDetails', pvrhost, params={'channelid': channelid})
+        if pvrdetails and pvrdetails['channeldetails']['channelid'] == channelid:
+            channel = pvrdetails['channeldetails']['label']
+    except:
+        pass
+
+    return channel
+
+
+def get_curr_recs(pvrhost):
+    curr_recs = []
+    time_fmt = '%Y-%m-%d %H:%M:%S'
+
+    now = int(time.mktime(time.localtime()))
+
+    try:
+        pvrtimers = json_request('PVR.GetTimers', pvrhost, params={'properties': ['title', 'starttime', 'endtime', 'state', 'channelid']})
+        if pvrtimers:
+            for timer in pvrtimers['timers']:
+                if timer['state'] == 'recording':
+                    timer_start = int(time.mktime(time.strptime(utc_to_local(timer['starttime'], time_fmt), time_fmt)))
+                    timer_end = int(time.mktime(time.strptime(utc_to_local(timer['endtime'], time_fmt), time_fmt)))
+
+                    pos = now - timer_start
+                    p = {'hours': int(pos/3600), 'minutes':int(int(pos/60)%60), 'seconds':int(pos%60)}
+
+                    length = timer_end - timer_start
+                    l = {'hours': int(length/3600), 'minutes':int(int(length/60)%60), 'seconds':int(length%60)}
+
+                    r = {'title':timer['title'], 'channelid':timer['channelid'], 'time':p, 'totaltime':l}
+                    curr_recs.append(r)
+
+    except KeyError:
+        pass
+
+    return curr_recs
+
+
 if __name__ == '__main__':
 
     items = []
     hosts = []
+    rec_channels = []
 
     username = __setting__('username')
     password = __setting__('password')
@@ -240,7 +300,17 @@ if __name__ == '__main__':
                                                            tdata['totaltime']['hours'], tdata['totaltime']['minutes'], tdata['totaltime']['seconds'])
 
                 hosts.append(host['ip'])
+                rec_channels.append(None)
                 items.append(item)
+
+    curr_recs = get_curr_recs('localhost')
+    for rec in curr_recs:
+        item = '{}: \"{}\" ({})'.format(__localize__(30056), rec['title'].encode('utf-8'), get_channel('localhost', rec['channelid']))
+        item = '{} @ {:02d}:{:02d}:{:02d} / {:02d}:{:02d}:{:02d}'.format(item, rec['time']['hours'], rec['time']['minutes'], rec['time']['seconds'], \
+                                                       rec['totaltime']['hours'], rec['totaltime']['minutes'], rec['totaltime']['seconds'])
+        hosts.append('localhost')
+        rec_channels.append(rec['channelid'])
+        items.append(item)
 
     dialog = MultiChoiceDialog(__localize__(30050), items)
     dialog.doModal()
@@ -248,12 +318,15 @@ if __name__ == '__main__':
     if dialog.selected is not None:
         for index in dialog.selected:
             try:
-                player = json_request('Player.GetActivePlayers', hosts[index], port=rpcport, username=username, password=password)
-                if player and player[0]['type'] in ['audio', 'video']:
-                    player_id = player[0]['playerid']
-                    json_request('Player.Stop', hosts[index], params={'playerid': player_id}, port=rpcport, username=username, password=password)
-                    json_request('GUI.ShowNotification', hosts[index], params={'title': __addon_id__, 'message': __localize__(30055)}, port=rpcport, username=username, password=password)
-
+                if rec_channels[index] is None:
+                    player = json_request('Player.GetActivePlayers', hosts[index], port=rpcport, username=username, password=password)
+                    if player and player[0]['type'] in ['audio', 'video']:
+                        player_id = player[0]['playerid']
+                        json_request('Player.Stop', hosts[index], params={'playerid': player_id}, port=rpcport, username=username, password=password)
+                        json_request('GUI.ShowNotification', hosts[index], params={'title': __addon_id__, 'message': __localize__(30055)}, port=rpcport, username=username, password=password)
+                else:
+                    json_request('PVR.Record', hosts[index],  params={'channel': rec_channels[index]}, port=rpcport, username=username, password=password)
+                    #json_request('GUI.ShowNotification', hosts[index], params={'title': __addon_id__, 'message': __localize__(30057)}, port=rpcport, username=username, password=password)
             except:
                 continue
 

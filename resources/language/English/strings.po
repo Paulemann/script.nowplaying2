@@ -102,6 +102,14 @@ msgid "TV Recording"
 msgstr ""
 
 msgctxt "#30055"
-msgid "The current playback was intentionally stopped."
+msgid "The current playback has been cancelled."
+msgstr ""
+
+msgctxt "#30056"
+msgid "Current Recording"
+msgstr ""
+
+msgctxt "#30057"
+msgid "The current recording has been cancelled."
 msgstr ""
 

@@ -102,5 +102,13 @@ msgid "TV Recording"
 msgstr "TV-Aufnahme"
 
 msgctxt "#30055"
-msgid "The current playback was intentionally stopped."
-msgstr "Die aktuelle Wiedergabe wurde absichtlich beendet."
+msgid "The current playback has been cancelled."
+msgstr "Die aktuelle Wiedergabe wurde abgebrochen."
+
+msgctxt "#30056"
+msgid "Current Recording"
+msgstr "Momentane Aufnahme"
+
+msgctxt "#30057"
+msgid "The current recording has been cancelled."
+msgstr "Die momentane Aufnahme wurde abgebrochen."
