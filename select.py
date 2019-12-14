@@ -191,7 +191,8 @@ def find_hosts(port=34890):
                     host['name'] = socket.gethostbyaddr(remote_addr)[0].split('.')[0]
                 except:
                     host['name'] = remote_addr
-                hosts.append(host)
+                if host not in hosts:
+                    hosts.append(host)
     else:
         for i in range(4):
             host = {'ip': __setting__('client{:d}_ip'.format(i + 1))}
