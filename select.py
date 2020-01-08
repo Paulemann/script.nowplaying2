@@ -9,7 +9,6 @@ import xbmcgui
 import xbmcaddon
 import subprocess
 import json
-import urllib2
 import socket
 import codecs
 #import pyxbmct
@@ -20,6 +19,12 @@ from dateutil import tz
 import _strptime
 
 from contextlib import closing
+
+try:
+    from urllib.request import Request, urlopen
+    from urllib.parse import unquote
+except ImportError:
+    from urllib2 import Request, urlopen, unquote
 
 
 __addon__ = xbmcaddon.Addon()
@@ -58,7 +63,7 @@ class MultiChoiceDialog(pyxbmct.AddonDialogWindow):
         self.set_controls()
         self.listing.addItems(items or [])
         if (self.listing.size() > 0):
-            for index in xrange(self.listing.size()):
+            for index in range(self.listing.size()):
                 if index in self.selected:
                     self.listing.getListItem(index).setIconImage(__checked_icon__)
                     self.listing.getListItem(index).setLabel2("checked")
@@ -110,7 +115,7 @@ class MultiChoiceDialog(pyxbmct.AddonDialogWindow):
             list_item.setLabel2("checked")
 
     def ok(self):
-        self.selected = [index for index in xrange(self.listing.size())
+        self.selected = [index for index in range(self.listing.size())
                                 if self.listing.getListItem(index).getLabel2() == "checked"]
         super(MultiChoiceDialog, self).close()
 
@@ -126,7 +131,8 @@ def mixed_decoder(unicode_error):
     next_position = unicode_error.start + err_len
     replacement = err_str[unicode_error.start:unicode_error.end].decode('cp1252')
 
-    return u'%s' % replacement, next_position
+    #return u'%s' % replacement, next_position
+    return '%s' % replacement, next_position
 
 codecs.register_error('mixed', mixed_decoder)
 
@@ -149,11 +155,11 @@ def json_request(method, host, params=None, port=8080, username=None, password=N
         header['Authorization'] = 'Basic {}'.format(base64str)
 
     try:
-        request = urllib2.Request(url, json.dumps(jsondata), header)
-        with closing(urllib2.urlopen(request, timeout=0.2)) as response:
+        request = Request(url, json.dumps(jsondata), header)
+        with closing(urlopen(request, timeout=0.2)) as response:
             data = json.loads(response.read().decode('utf8', 'mixed'))
 
-            if data['id'] == method and data.has_key('result'):
+            if data['id'] == method and 'result' in data:
                 return data['result']
 
     except:
@@ -281,13 +287,13 @@ if __name__ == '__main__':
                 try:
                     if data['item']['type'] == 'channel':
                         item = '{} (IP: {}): \"{}\" ({}: {})'.format(host['name'], host['ip'], data['item']['title'].encode('utf-8'), ['Radio', 'TV'][player_id], data['item']['label'])
-                    elif data['item'].has_key('file') and urllib2.unquote(data['item']['file'].encode('utf-8'))[:6] == 'pvr://':
+                    elif 'file' in data['item'] and unquote(data['item']['file'].encode('utf-8'))[:6] == 'pvr://':
                         item = '{} (IP: {}): \"{}\" ({})'.format(host['name'], host['ip'], data['item']['title'].encode('utf-8'), __localize__(30054))
-                    elif data['item']['type'] == 'song' and data['item'].has_key('artist') and data['item'].has_key('album') and data['item'].has_key('track'):
+                    elif data['item']['type'] == 'song' and 'artist' in data['item'] and 'album' in data['item'] and 'track' in data['item']:
                         item = '{} (IP: {}): \"{}: {} - {:02d}: {}\" ({})'.format(host['name'], host['ip'], data['item']['artist'][0].encode('utf-8') , data['item']['album'].encode('utf-8'), data['item']['track'], data['item']['label'].encode('utf-8'), data['item']['type'])
-                    elif data['item']['type'] == 'musicvideo' and data['item'].has_key('artist'):
+                    elif data['item']['type'] == 'musicvideo' and 'artist' in data['item']:
                         item = '{} (IP: {}): \"{}: {}\" ({})'.format(host['name'], host['ip'], data['item']['artist'][0].encode('utf-8'), data['item']['label'].encode('utf-8'), data['item']['type'])
-                    elif data['item']['type'] == 'episode' and data['item'].has_key('showtitle'):
+                    elif data['item']['type'] == 'episode' and 'showtitle' in data['item']:
                         item = '{} (IP: {}): \"{} - {}\" ({})'.format(host['name'], host['ip'], data['item']['showtitle'].encode('utf-8'), data['item']['label'].encode('utf-8'), data['item']['type'])
                     else:
                         item = '{} (IP: {}): \"{}\" ({})'.format(host['name'], host['ip'], data['item']['label'].encode('utf-8'), data['item']['type'])
