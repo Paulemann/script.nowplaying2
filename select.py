@@ -1,8 +1,19 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+######################################
+# This addon requires:               #
+#                                    #
+# pip(3) install python-dateutil     #
+# pip(3) install pycryptodomex       #
+#                                    #
+# sudo apt-get install nettools      #
+#                                    #
+######################################
+
 import os
 import sys
+import base64
 import time
 import xbmc
 import xbmcgui
@@ -11,30 +22,35 @@ import subprocess
 import json
 import socket
 import codecs
-#import pyxbmct
+import requests
 import pyxbmct.addonwindow as pyxbmct
 
 from datetime import datetime, tzinfo, timedelta
 from dateutil import tz
 import _strptime
 
-from contextlib import closing
-
 try:
-    from urllib.request import Request, urlopen
     from urllib.parse import unquote
 except ImportError:
-    from urllib2 import Request, urlopen, unquote
+    from urllib2 import unquote
 
+if sys.version_info.major < 3:
+    INFO = xbmc.LOGNOTICE
+else:
+    INFO = xbmc.LOGINFO
+DEBUG = xbmc.LOGDEBUG
 
-__addon__ = xbmcaddon.Addon()
-__setting__ = __addon__.getSetting
-__addon_id__ = __addon__.getAddonInfo('id')
-__addon_path__ = __addon__.getAddonInfo('path')
-__checked_icon__ = os.path.join(__addon_path__, 'checked.png') # Don't decode _path to utf-8!!!
-__unchecked_icon__ = os.path.join(__addon_path__, 'unchecked.png') # Don't decode _path to utf-8!!!
-__localize__ = __addon__.getLocalizedString
+__addon__          = xbmcaddon.Addon()
+__setting__        = __addon__.getSetting
+__addon_id__       = __addon__.getAddonInfo('id')
+__addon_name__     = __addon__.getAddonInfo('name')
+__addon_path__     = __addon__.getAddonInfo('path')
+__localize__       = __addon__.getLocalizedString
 
+__checked_icon__   = os.path.join(__addon_path__, 'resources', 'media', 'checked.png')
+__unchecked_icon__ = os.path.join(__addon_path__, 'resources', 'media', 'unchecked.png')
+__list_bg__        = os.path.join(__addon_path__, 'resources', 'media', 'background.png')
+__texture_nf__     = os.path.join(__addon_path__, 'resources', 'media', 'texture-nf.png')
 
 # Enable or disable Estuary-based design explicitly
 pyxbmct.skin.estuary = True
@@ -59,28 +75,44 @@ class MultiChoiceDialog(pyxbmct.AddonDialogWindow):
     def __init__(self, title="", items=None, selected=None):
         super(MultiChoiceDialog, self).__init__(title)
         self.setGeometry(1000, 350, 6, 10)
+
         self.selected = selected or []
+        self.items = items or []
+
         self.set_controls()
-        self.listing.addItems(items or [])
-        if (self.listing.size() > 0):
-            for index in range(self.listing.size()):
-                if index in self.selected:
-                    self.listing.getListItem(index).setIconImage(__checked_icon__)
-                    self.listing.getListItem(index).setLabel2("checked")
-                else:
-                    self.listing.getListItem(index).setIconImage(__unchecked_icon__)
-                    self.listing.getListItem(index).setLabel2("unchecked")
-        else:
-            self.listing.addItems([__localize__(30053)])
         self.place_controls()
         self.connect_controls()
+
+        self.listing.addItems(self.items)
+        if (self.listing.size() > 0):
+            for index in range(self.listing.size()):
+                listitem = self.listing.getListItem(index)
+                try:
+                    listitem.setIconImage(__checked_icon if index in self.selected else __unchecked_icon__)
+                except:
+                    listitem.setArt({'icon': __checked_icon__ if index in self.selected else __unchecked_icon__})
+                listitem.setProperty('selected', 'true' if index in self.selected else 'false')
+        else:
+            self.listing.addItems([__localize__(30053)])
+            self.listing.getListItem(0).setProperty('selected', '')
+
         self.set_navigation()
 
     def set_controls(self):
-        self.listing = pyxbmct.List(_imageWidth=15)
-        self.placeControl(self.listing, 0, 0, rowspan=5, columnspan=10)
+        self.list_bg = pyxbmct.Image(__list_bg__)
+        self.listing = pyxbmct.List(_imageWidth=15, _itemTextYOffset=-1, _alignmentY=pyxbmct.ALIGN_CENTER_Y, _space=3, buttonTexture=__texture_nf__)
         self.ok_button = pyxbmct.Button(__localize__(30051))
         self.cancel_button = pyxbmct.Button(__localize__(30052))
+
+    def place_controls(self):
+        self.placeControl(self.list_bg, 0, 0, rowspan=5, columnspan=10)
+        self.placeControl(self.listing, 0, 0, rowspan=6, columnspan=10)
+
+        if self.items:
+            self.placeControl(self.ok_button, 5, 3, columnspan=2)
+            self.placeControl(self.cancel_button, 5, 5, columnspan=2)
+        else:
+            self.placeControl(self.cancel_button, 5, 4, columnspan=2)
 
     def connect_controls(self):
         self.connect(self.listing, self.check_uncheck)
@@ -88,15 +120,8 @@ class MultiChoiceDialog(pyxbmct.AddonDialogWindow):
         self.connect(self.cancel_button, self.close)
         self.connect(pyxbmct.ACTION_NAV_BACK, self.close)
 
-    def place_controls(self):
-        if (self.listing.getListItem(0).getLabel2()):
-            self.placeControl(self.ok_button, 5, 3, columnspan=2)
-            self.placeControl(self.cancel_button, 5, 5, columnspan=2)
-        else:
-            self.placeControl(self.cancel_button, 5, 4, columnspan=2)
-
     def set_navigation(self):
-        if (self.listing.getListItem(0).getLabel2()):
+        if self.items:
             self.listing.controlUp(self.ok_button)
             self.listing.controlDown(self.ok_button)
             self.ok_button.setNavigation(self.listing, self.listing, self.cancel_button, self.cancel_button)
@@ -106,41 +131,65 @@ class MultiChoiceDialog(pyxbmct.AddonDialogWindow):
             self.setFocus(self.cancel_button)
 
     def check_uncheck(self):
-        list_item = self.listing.getSelectedItem()
-        if list_item.getLabel2() == "checked":
-            list_item.setIconImage(__unchecked_icon__)
-            list_item.setLabel2("unchecked")
-        else:
-            list_item.setIconImage(__checked_icon__)
-            list_item.setLabel2("checked")
+        listitem = self.listing.getSelectedItem()
+        listitem.setProperty('selected', 'false' if listitem.getProperty('selected') == 'true' else 'true')
+        try:
+            listitem.setIconImage(__checked_icon__ if listitem.getProperty('selected') else __unchecked_icon__)
+        except:
+            listitem.setArt({'icon': __checked_icon__ if listitem.getProperty('selected') == 'true'  else __unchecked_icon__})
 
     def ok(self):
         self.selected = [index for index in range(self.listing.size())
-                                if self.listing.getListItem(index).getLabel2() == "checked"]
+                                if self.listing.getListItem(index).getProperty('selected') == 'true']
         super(MultiChoiceDialog, self).close()
 
     def close(self):
-        self.selected = None
+        self.selected = []
         super(MultiChoiceDialog, self).close()
 
 
-def mixed_decoder(unicode_error):
+def utfy_dict(dic):
+    if not sys.version_info.major < 3:
+       return dic
 
+    if isinstance(dic,unicode):
+        return dic.encode("utf-8")
+    elif isinstance(dic,dict):
+        for key in dic:
+            dic[key] = utfy_dict(dic[key])
+        return dic
+    elif isinstance(dic,list):
+        new_l = []
+        for e in dic:
+            new_l.append(utfy_dict(e))
+        return new_l
+    else:
+        return dic
+
+
+#def mixed_decoder(error: UnicodeError) -> (str, int):
+#     bs: bytes = error.object[error.start: error.end]
+#     return bs.decode("cp1252"), error.start + 1
+
+def mixed_decoder(unicode_error):
     err_str = unicode_error[1]
     err_len = unicode_error.end - unicode_error.start
     next_position = unicode_error.start + err_len
     replacement = err_str[unicode_error.start:unicode_error.end].decode('cp1252')
 
-    #return u'%s' % replacement, next_position
-    return '%s' % replacement, next_position
+    if sys.version_info.major < 3:
+        return u'%s' % replacement, next_position
+    else:
+        return '%s' % replacement, next_position
 
 codecs.register_error('mixed', mixed_decoder)
 
 
-def json_request(method, host, params=None, port=8080, username=None, password=None):
+def jsonrpc_request(method, host='localhost', params=None, port=8080, username=None, password=None):
+    url     =    'http://{}:{}/jsonrpc'.format(host, port)
+    headers =    {'Content-Type': 'application/json'}
 
-    url    =    'http://{}:{}/jsonrpc'.format(host, port)
-    header =    {'Content-Type': 'application/json'}
+    xbmc.log(msg='[{}] Initializing RPC request to host {} with method \'{}\'.'.format(__addon_id__, host, method), level=DEBUG)
 
     jsondata = {
         'jsonrpc': '2.0',
@@ -151,26 +200,48 @@ def json_request(method, host, params=None, port=8080, username=None, password=N
         jsondata['params'] = params
 
     if username and password:
-        base64str = base64.encodestring('{}:{}'.format(username, password))[:-1]
-        header['Authorization'] = 'Basic {}'.format(base64str)
+        auth_str = '{}:{}'.format(username, password)
+        try:
+            base64str = base64.encodestring(auth_str)[:-1]
+        except:
+            base64str = base64.b64encode(auth_str.encode()).decode()
+        headers['Authorization'] = 'Basic {}'.format(base64str)
 
     try:
-        request = Request(url, json.dumps(jsondata), header)
-        with closing(urlopen(request, timeout=0.2)) as response:
-            data = json.loads(response.read().decode('utf8', 'mixed'))
+        if host in ['localhost', '127.0.0.1']:
+            response = xbmc.executeJSONRPC(json.dumps(jsondata))
+            if sys.version_info.major < 3:
+                data = json.loads(response.decode('utf-8', 'mixed'))
+            else:
+                data = json.loads(response)
+        else:
+            response = requests.post(url, data=json.dumps(jsondata), headers=headers)
+            if not response.ok:
+                xbmc.log(msg='[{}] RPC request to host {} failed with status \'{}\'.'.format(__addon_id__, host, response.status_code), level=INFO)
+                return None
 
-            if data['id'] == method and 'result' in data:
-                return data['result']
+            if sys.version_info.major < 3:
+                data = json.loads(response.content.decode('utf-8', 'mixed'))
+            else:
+                data = json.loads(response.text)
 
-    except:
+        if data['id'] == method and 'result' in data:
+            xbmc.log(msg='[{}] RPC request to host {} returns data \'{}\'.'.format(__addon_id__, host, data['result']), level=DEBUG)
+            return utfy_dict(data['result'])
+
+    except Exception as e:
+        xbmc.log(msg='[{}] RPC request to host {} failed with error \'{}\'.'.format(__addon_id__, host, str(e)), level=INFO)
         pass
 
-    return False
+    return None
 
 
 def find_hosts(port=34890):
 
     hosts = []
+
+    ip_list   = [ __setting__('client{:d}_ip'.format(i + 1)) for i in range(4) ]
+    name_list = [ __setting__('client{:d}_name'.format(i + 1)) for i in range(4) ]
 
     if __setting__('pvrclients').lower() == 'true':
         my_env = os.environ.copy()
@@ -194,9 +265,13 @@ def find_hosts(port=34890):
             if remote_addr and local_port == port:
                 host = {'ip': remote_addr}
                 try:
-                    host['name'] = socket.gethostbyaddr(remote_addr)[0].split('.')[0]
+                    index = ip_list.index(host['ip'])
+                    host['name'] = name_list[index]
                 except:
-                    host['name'] = remote_addr
+                    try:
+                        host['name'] = socket.gethostbyaddr(remote_addr)[0].split('.')[0]
+                    except:
+                        host['name'] = remote_addr
                 if not any(h['ip'] == remote_addr for h in hosts):
                     hosts.append(host)
     else:
@@ -228,7 +303,7 @@ def get_channel(pvrhost, channelid):
     channel = ''
 
     try:
-        pvrdetails = json_request('PVR.GetChannelDetails', pvrhost, params={'channelid': channelid})
+        pvrdetails = jsonrpc_request('PVR.GetChannelDetails', host=pvrhost, params={'channelid': channelid})
         if pvrdetails and pvrdetails['channeldetails']['channelid'] == channelid:
             channel = pvrdetails['channeldetails']['label']
     except:
@@ -244,7 +319,7 @@ def get_curr_recs(pvrhost):
     now = int(time.mktime(time.localtime()))
 
     try:
-        pvrtimers = json_request('PVR.GetTimers', pvrhost, params={'properties': ['title', 'starttime', 'endtime', 'state', 'channelid']})
+        pvrtimers = jsonrpc_request('PVR.GetTimers', host=pvrhost, params={'properties': ['title', 'starttime', 'endtime', 'state', 'channelid']})
         if pvrtimers:
             for timer in pvrtimers['timers']:
                 if timer['state'] == 'recording':
@@ -280,33 +355,34 @@ if __name__ == '__main__':
     for host in find_hosts(port=pvrport):
 
         try:
-            player = json_request('Player.GetActivePlayers', host['ip'], port=rpcport, username=username, password=password)
-        except:
+            player = jsonrpc_request('Player.GetActivePlayers', host=host['ip'], port=rpcport, username=username, password=password)
+        except Exception as e:
             # show error msg, it seeme this remote host does not allow rpc control via http
+            xbmc.log(msg='[{}] RPC control for host {} failed with error \'{}\'.'.format(__addon_id__, host['ip'], str(e)), level=INFO)
             continue
 
         if player and player[0]['type'] in ['audio', 'video']:
             player_id = player[0]['playerid']
-            data = json_request('Player.GetItem', host['ip'], params={'properties': ['title', 'file', 'showtitle', 'album', 'artist', 'track'], 'playerid': player_id}, port=rpcport, username=username, password=password)
+            data = jsonrpc_request('Player.GetItem', host=host['ip'], params={'properties': ['title', 'file', 'showtitle', 'album', 'artist', 'track'], 'playerid': player_id}, port=rpcport, username=username, password=password)
             if data:
                 try:
                     if data['item']['type'] == 'channel':
-                        item = '{} (IP: {}): \"{}\" ({}: {})'.format(host['name'], host['ip'], data['item']['title'].encode('utf-8'), ['Radio', 'TV'][player_id], data['item']['label'])
-                    elif 'file' in data['item'] and unquote(data['item']['file'].encode('utf-8'))[:6] == 'pvr://':
-                        item = '{} (IP: {}): \"{}\" ({})'.format(host['name'], host['ip'], data['item']['title'].encode('utf-8'), __localize__(30054))
+                        item = '{} (IP: {}): \"{}\" ({}: {})'.format(host['name'], host['ip'], data['item']['title'], ['Radio', 'TV'][player_id], data['item']['label'])
+                    elif 'file' in data['item'] and unquote(data['item']['file'])[:6] == 'pvr://':
+                        item = '{} (IP: {}): \"{}\" ({})'.format(host['name'], host['ip'], data['item']['title'], __localize__(30054))
                     elif data['item']['type'] == 'song' and 'artist' in data['item'] and 'album' in data['item'] and 'track' in data['item']:
-                        item = '{} (IP: {}): \"{}: {} - {:02d}: {}\" ({})'.format(host['name'], host['ip'], data['item']['artist'][0].encode('utf-8') , data['item']['album'].encode('utf-8'), data['item']['track'], data['item']['label'].encode('utf-8'), data['item']['type'])
+                        item = '{} (IP: {}): \"{}: {} - {:02d}: {}\" ({})'.format(host['name'], host['ip'], data['item']['artist'][0], data['item']['album'], data['item']['track'], data['item']['label'], data['item']['type'])
                     elif data['item']['type'] == 'musicvideo' and 'artist' in data['item']:
-                        item = '{} (IP: {}): \"{}: {}\" ({})'.format(host['name'], host['ip'], data['item']['artist'][0].encode('utf-8'), data['item']['label'].encode('utf-8'), data['item']['type'])
+                        item = '{} (IP: {}): \"{}: {}\" ({})'.format(host['name'], host['ip'], data['item']['artist'][0], data['item']['label'], data['item']['type'])
                     elif data['item']['type'] == 'episode' and 'showtitle' in data['item']:
-                        item = '{} (IP: {}): \"{} - {}\" ({})'.format(host['name'], host['ip'], data['item']['showtitle'].encode('utf-8'), data['item']['label'].encode('utf-8'), data['item']['type'])
+                        item = '{} (IP: {}): \"{} - {}\" ({})'.format(host['name'], host['ip'], data['item']['showtitle'], data['item']['label'], data['item']['type'])
                     else:
-                        item = '{} (IP: {}): \"{}\" ({})'.format(host['name'], host['ip'], data['item']['label'].encode('utf-8'), data['item']['type'])
+                        item = '{} (IP: {}): \"{}\" ({})'.format(host['name'], host['ip'], data['item']['label'], data['item']['type'])
 
                 except:
-                    item = '{} (IP: {}): \"{}\" ({})'.format(host['name'], host['ip'], data['item']['label'].encode('utf-8'), data['item']['type'])
+                    item = '{} (IP: {}): \"{}\" ({})'.format(host['name'], host['ip'], data['item']['label'], data['item']['type'])
 
-                tdata = json_request('Player.GetProperties', host['ip'], params={'properties': ['time', 'totaltime'], 'playerid': player_id}, port=rpcport, username=username, password=password)
+                tdata = jsonrpc_request('Player.GetProperties', host=host['ip'], params={'properties': ['time', 'totaltime'], 'playerid': player_id}, port=rpcport, username=username, password=password)
                 if tdata:
                     item = '{} @ {:02d}:{:02d}:{:02d} / {:02d}:{:02d}:{:02d}'.format(item, tdata['time']['hours'], tdata['time']['minutes'], tdata['time']['seconds'], \
                                                            tdata['totaltime']['hours'], tdata['totaltime']['minutes'], tdata['totaltime']['seconds'])
@@ -317,7 +393,7 @@ if __name__ == '__main__':
 
     curr_recs = get_curr_recs('localhost')
     for rec in curr_recs:
-        item = '{}: \"{}\" ({})'.format(__localize__(30056), rec['title'].encode('utf-8'), get_channel('localhost', rec['channelid']))
+        item = '{}: \"{}\" ({})'.format(__localize__(30056), rec['title'], get_channel('localhost', rec['channelid']))
         item = '{} @ {:02d}:{:02d}:{:02d} / {:02d}:{:02d}:{:02d}'.format(item, rec['time']['hours'], rec['time']['minutes'], rec['time']['seconds'], \
                                                        rec['totaltime']['hours'], rec['totaltime']['minutes'], rec['totaltime']['seconds'])
         hosts.append('localhost')
@@ -331,14 +407,14 @@ if __name__ == '__main__':
         for index in dialog.selected:
             try:
                 if rec_channels[index] is None:
-                    player = json_request('Player.GetActivePlayers', hosts[index], port=rpcport, username=username, password=password)
+                    player = jsonrpc_request('Player.GetActivePlayers', host=hosts[index], port=rpcport, username=username, password=password)
                     if player and player[0]['type'] in ['audio', 'video']:
                         player_id = player[0]['playerid']
-                        json_request('Player.Stop', hosts[index], params={'playerid': player_id}, port=rpcport, username=username, password=password)
-                        json_request('GUI.ShowNotification', hosts[index], params={'title': __addon_id__, 'message': __localize__(30055)}, port=rpcport, username=username, password=password)
+                        jsonrpc_request('Player.Stop', host=hosts[index], params={'playerid': player_id}, port=rpcport, username=username, password=password)
+                        jsonrpc_request('GUI.ShowNotification', host=hosts[index], params={'title': __addon_id__, 'message': __localize__(30055)}, port=rpcport, username=username, password=password)
                 else:
-                    json_request('PVR.Record', hosts[index],  params={'channel': rec_channels[index]}, port=rpcport, username=username, password=password)
-                    #json_request('GUI.ShowNotification', hosts[index], params={'title': __addon_id__, 'message': __localize__(30057)}, port=rpcport, username=username, password=password)
+                    jsonrpc_request('PVR.Record', host=hosts[index],  params={'channel': rec_channels[index]}, port=rpcport, username=username, password=password)
+                    #jsonrpc_request('GUI.ShowNotification', host=hosts[index], params={'title': __addon_id__, 'message': __localize__(30057)}, port=rpcport, username=username, password=password)
             except:
                 continue
 
